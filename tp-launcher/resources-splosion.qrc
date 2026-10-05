@@ -1,0 +1,12 @@
+<RCC>
+    <!-- Art + theme for the Splosionman build (TP_GAME=splosionman).
+         Same resource aliases as resources.qrc so the shared code
+         (":/assets/...", ":/theme/<game>.qss") works unchanged. -->
+    <qresource prefix="/assets">
+        <file alias="banner.png">assets-splosion/banner.png</file>
+        <file alias="icon.png">assets-splosion/icon.png</file>
+    </qresource>
+    <qresource prefix="/theme">
+        <file alias="splosion.qss">theme/splosion.qss</file>
+    </qresource>
+</RCC>

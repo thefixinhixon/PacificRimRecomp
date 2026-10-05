@@ -1,0 +1,18 @@
+# Pacific Rim codegen config - function hints.
+# Targets the analyzer missed on the first pass (enumerated from the
+# generated stubs by enumerate_missing2.py, 2026-10-05).
+
+[functions]
+0x823B61D0 = { name = "sub_823B61D0" }
+0x823B83A4 = { name = "sub_823B83A4" }
+0x823B83C0 = { name = "sub_823B83C0" }
+0x823B8F50 = { name = "sub_823B8F50" }
+0x8259F7D8 = { name = "sub_8259F7D8" }
+0x8259FD14 = { name = "sub_8259FD14" }
+0x825A09B4 = { name = "sub_825A09B4" }
+# Round 2 (audit_gotos.py): branch targets inside a shared body that the
+# analyzer assigned to a sibling function entry; hinting them as entries
+# makes codegen split at the target so branches become tail calls.
+0x82286C5C = { name = "sub_82286C5C" }
+0x82286DB0 = { name = "sub_82286DB0" }
+0x822884BC = { name = "sub_822884BC" }

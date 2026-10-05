@@ -1,0 +1,11 @@
+<RCC>
+    <!-- Art + theme, embedded so the binary is self-contained.
+         Pacific Rim ("Shatterdome Launcher") resources. -->
+    <qresource prefix="/assets">
+        <file alias="banner.png">assets-pacificrim/banner.png</file>
+        <file alias="icon.png">assets-pacificrim/icon.png</file>
+    </qresource>
+    <qresource prefix="/theme">
+        <file alias="pacificrim.qss">theme/pacificrim.qss</file>
+    </qresource>
+</RCC>

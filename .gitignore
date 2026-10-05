@@ -1,0 +1,34 @@
+# Game data -- proprietary, never committed. Supply your own copy of
+# the game (Xbox 360 package for title ID 584112C1, or an extracted
+# folder containing default.xex).
+assets/
+*.xex
+*.iso
+*.rar
+
+# Build output
+out/
+bin/
+build/
+build-*/
+*.AppImage
+
+# Compiled binaries and runtime libraries. The game executable and
+# the librex*.so / *.dll runtime set only ever ship as matched
+# release artifacts -- never mix sets, never commit them.
+/pacificrim
+/pacificrim.exe
+TPFactualMetalLauncher
+TPFactualMetalLauncher.exe
+TPMawLauncher
+TPMawLauncher.exe
+TPSplosionmanLauncher
+TPSplosionmanLauncher.exe
+TPPacificRimLauncher
+TPPacificRimLauncher.exe
+*.so
+*.dll
+
+# Logs
+*.log
+logs/

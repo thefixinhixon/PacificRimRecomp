@@ -1,0 +1,11 @@
+<RCC>
+    <!-- Art + theme, embedded so the binary is self-contained.
+         Real Steel ("Factual Metal Launcher") resources. -->
+    <qresource prefix="/assets">
+        <file alias="banner.png">assets-realsteel/banner.png</file>
+        <file alias="icon.png">assets-realsteel/icon.png</file>
+    </qresource>
+    <qresource prefix="/theme">
+        <file alias="realsteel.qss">theme/realsteel.qss</file>
+    </qresource>
+</RCC>

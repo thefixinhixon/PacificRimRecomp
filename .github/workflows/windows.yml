@@ -1,0 +1,203 @@
+# =============================================================================
+# Windows build -- for Pacific Rim. Adapted from SplosionManRecomp's
+# workflow (the one that produced its verified Windows test build);
+# same house SDK, same two-job shape.
+#
+# Two independent jobs on windows-latest:
+#
+#   game      this repo + ReXGlue SDK at a pinned commit + patches/
+#             house-sdk.patch, built with the repo's win-amd64-release
+#             preset. NOTE: the preset compiles with clang/clang++ and
+#             Ninja -- the "Windows preset" here is NOT MSVC cl.exe.
+#             FidelityFX is forced ON (-DREXGLUE_ENABLE_FIDELITYFX=ON);
+#             without it the runtime silently falls back to bilinear
+#             upscaling (bit us on Linux twice: Condemned v12,
+#             'Splosion Man v2.0).
+#
+#   launcher  the TP house launcher in tp-launcher/ (this same repo --
+#             single checkout, no second source), built for Pacific Rim
+#             with -DTP_GAME=pacificrim against MSVC Qt 6.8. The product
+#             is the "Shatterdome Launcher" (TPPacificRimLauncher).
+#
+# Notes and open blockers:
+#   [B1] Codegen must stay a no-op in CI: the XEX is proprietary and
+#        NOT in this repo. This repo's generated/rexglue.cmake carries
+#        the house stamp-only rule (codegen is a manual step for this
+#        project -- see scripts/refix.sh): the "codegen" custom command
+#        depends on no inputs and does nothing but touch its stamp, so
+#        a fresh checkout compiles the committed generated/ tree as-is.
+#        The committed generated/ is the POST-FIX state (config hints +
+#        the scripts/ post-processing applied, incl. the byte-table
+#        dispatch fixes -- the tree that produced the shipping Linux
+#        build).
+#   [B2] The SDK version check (rex_resolve_version in the SDK) hard-
+#        fails when the game repo carries a release tag that reads
+#        "ahead" of the SDK floor -- hit on SplosionManRecomp with its
+#        v1.3 tag (local workaround: park .git during configure/build).
+#        The game checkout therefore uses fetch-tags: false. If
+#        configure still trips the check, the fallback is deleting
+#        local tags in a step before configuring.
+#   [B3] Windows runtime file names are known from the 'Splosion Man
+#        build: rexruntime.dll + rexgpu-xenos.dll + the FidelityFX
+#        amd_fidelityfx_dx12.dll, no lib prefix. The launcher's
+#        Windows program-set names (tp-launcher/src/platform.cpp) are
+#        profile-driven and already match.
+#   [B4] The launcher executable is a console-subsystem binary on
+#        Windows (add_executable in tp-launcher lacks the WIN32 flag)
+#        -- cosmetic, fine for the CI milestone. (The game exe itself
+#        is already WIN32-subsystem per the project CMakeLists.)
+#
+# Sources verified publicly cloneable without credentials:
+# rexglue/rexglue-sdk, rexglue/FidelityFX-SDK, this repo. FidelityFX
+# needs no manual step: the SDK's CMake FetchContent clones
+# rexglue/FidelityFX-SDK at eee08db1688ac3d1275a70b728f4a8ba22914213.
+# The house patch also carries the WIN32 llvm-rc UTF-16 resource fix
+# the FidelityFX build needs under clang on Windows, and the SDK's
+# thirdparty submodules (cli11 et al.) must be initialized or
+# configure fails -- the clone step below does both.
+# =============================================================================
+
+name: Windows build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Exact SDK commit patches/house-sdk.patch was generated from. Do not float.
+  REXSDK_COMMIT: f5337cdc947ff6d4c4196737e2c807a48f2a1fc2
+
+jobs:
+  game:
+    name: Game (pacificrim.exe + runtime)
+    runs-on: windows-latest
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v4
+        with:
+          path: repo
+          fetch-tags: false # see [B2]
+
+      - name: Check out ReXGlue SDK (pinned, LF endings)
+        shell: pwsh
+        # Manual clone with autocrlf OFF. actions/checkout on Windows
+        # materializes CRLF files, and git apply then rejects every hunk
+        # of the (LF) house patch -- SplosionManRecomp run #1 failed
+        # exactly this way. The build wants LF anyway. Submodules:
+        # thirdparty/CMakeLists.txt hard-fails configure when e.g.
+        # cli11 is not initialized.
+        run: |
+          git -c core.autocrlf=false clone --no-checkout https://github.com/rexglue/rexglue-sdk.git rexglue-sdk
+          git -C rexglue-sdk -c core.autocrlf=false checkout ${{ env.REXSDK_COMMIT }}
+          git -C rexglue-sdk -c core.autocrlf=false submodule update --init --recursive
+
+      - name: Apply house SDK patches
+        shell: pwsh
+        working-directory: rexglue-sdk
+        # Applies to the pinned commit per the local verification
+        # recorded in the Pacific Rim project notes.
+        # The two D3D12 presenter files are EXCLUDED: the house patch
+        # carries a half-ported Dante-era feature there (guest-output
+        # shared textures) whose base-class half never landed in this
+        # SDK tree, and nothing else references it. It is invisible on
+        # Linux (D3D12 never compiles) but breaks the Windows build, so
+        # Windows uses the pristine upstream presenter for now.
+        run: >-
+          git apply --whitespace=nowarn --ignore-whitespace
+          --exclude=include/rex/ui/d3d12/d3d12_presenter.h
+          --exclude=src/ui/d3d12/d3d12_presenter.cpp
+          ../repo/patches/house-sdk.patch
+
+      - name: Configure (win-amd64-release preset, FidelityFX ON)
+        shell: pwsh
+        working-directory: repo
+        run: >
+          cmake --preset win-amd64-release
+          -DREXSDK_DIR="$env:GITHUB_WORKSPACE/rexglue-sdk"
+          -DREXGLUE_ENABLE_FIDELITYFX=ON
+          -DCMAKE_C_FLAGS=-march=x86-64-v2
+          -DCMAKE_CXX_FLAGS=-march=x86-64-v2
+
+      - name: Build
+        shell: pwsh
+        working-directory: repo
+        run: cmake --build --preset win-amd64-release
+
+      - name: List build outputs (diagnostic)
+        if: always()
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse repo -Include *.exe, *.dll |
+            Where-Object { $_.FullName -notmatch 'rexglue-sdk' } |
+            Select-Object -ExpandProperty FullName
+
+      - name: Stage complete game set
+        shell: pwsh
+        # The matched set is exe + rexruntime.dll + rexgpu-xenos.dll +
+        # amd_fidelityfx_dx12.dll in ONE folder (never mix sets). The
+        # GPU plugin stages only into the SDK out dir, which an early
+        # 'Splosion Man artifact missed -- gather everything explicitly.
+        run: |
+          New-Item -ItemType Directory -Force dist-windows | Out-Null
+          Copy-Item repo/out/build/win-amd64-release/pacificrim.exe dist-windows/
+          Copy-Item repo/out/build/win-amd64-release/amd_fidelityfx_dx12.dll dist-windows/
+          $rt = 'repo/out/build/win-amd64-release/rexruntime.dll'
+          if (-not (Test-Path $rt)) { $rt = 'rexglue-sdk/out/win-amd64/rexruntime.dll' }
+          Copy-Item $rt dist-windows/
+          Copy-Item rexglue-sdk/out/win-amd64/rexgpu-xenos.dll dist-windows/
+          Get-ChildItem dist-windows | Select-Object Name, Length
+
+      - name: Upload game artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pacificrim-windows-game
+          path: dist-windows/*
+          if-no-files-found: error
+
+  launcher:
+    name: Shatterdome Launcher (Pacific Rim)
+    runs-on: windows-latest
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.8 (MSVC 2022 x64)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          arch: win64_msvc2022_64
+          # tp-launcher needs Qt6 Widgets only (CMakeLists verified).
+          # Local dev used Qt 6.4.2 (container) and 6.10 (host).
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure launcher (TP_GAME=pacificrim)
+        shell: pwsh
+        run: >
+          cmake -S tp-launcher -B tp-launcher/out/build/win -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DTP_GAME=pacificrim
+
+      - name: Build launcher
+        shell: pwsh
+        run: cmake --build tp-launcher/out/build/win
+
+      - name: Deploy Qt runtime next to the exe
+        shell: pwsh
+        run: windeployqt tp-launcher/out/build/win/TPPacificRimLauncher.exe
+
+      - name: Upload launcher artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shatterdome-launcher-windows
+          path: |
+            tp-launcher/out/build/win/TPPacificRimLauncher.exe
+            tp-launcher/out/build/win/*.dll
+            tp-launcher/out/build/win/platforms/**
+            tp-launcher/out/build/win/styles/**
+            tp-launcher/out/build/win/imageformats/**
+            tp-launcher/out/build/win/tls/**
+          if-no-files-found: error

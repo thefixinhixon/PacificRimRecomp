@@ -1,0 +1,11 @@
+<RCC>
+    <!-- Art + theme, embedded so the binary is self-contained.
+         Per-game themes swap the .qss (and art) referenced here. -->
+    <qresource prefix="/assets">
+        <file alias="banner.png">assets/banner.png</file>
+        <file alias="icon.png">assets/icon.png</file>
+    </qresource>
+    <qresource prefix="/theme">
+        <file alias="maw.qss">theme/maw.qss</file>
+    </qresource>
+</RCC>
